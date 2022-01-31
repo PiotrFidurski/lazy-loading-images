@@ -50,7 +50,7 @@ type ImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
  * @param root - element used as the viewport for checking visibility of target,
  * defaults to browser viewport if not specified.
  * @param rootMargin - Margin around the root.
- * @param threshold - At what percentage of target visiblity the callback is invoked
+ * @param threshhold - At what percentage of target visiblity the callback is invoked
  */
 const options = {
   root: null,
