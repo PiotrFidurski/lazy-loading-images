@@ -1,45 +1,103 @@
-import { useState } from 'react'
-import logo from './logo.svg'
-import './App.css'
+import { useEffect, useRef } from "react";
+import "./App.css";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>Hello Vite + React!</p>
-        <p>
-          <button type="button" onClick={() => setCount((count) => count + 1)}>
-            count is: {count}
-          </button>
-        </p>
-        <p>
-          Edit <code>App.tsx</code> and save to test HMR updates.
-        </p>
-        <p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-          {' | '}
-          <a
-            className="App-link"
-            href="https://vitejs.dev/guide/features.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Vite Docs
-          </a>
-        </p>
-      </header>
-    </div>
-  )
+function getCloudinaryImageUrl(id: string) {
+  const original = `https://res.cloudinary.com/chimson/image/upload/v1643655382/intersection-observer-demo/image_${id}.jpg`;
+  const placeholder = `https://res.cloudinary.com/chimson/image/upload/f_webp,e_blur:1000,q_1/v1643655382/intersection-observer-demo/image_${id}.jpg`;
+  return { original, placeholder };
 }
 
-export default App
+const images = Array(15)
+  .fill(null)
+  .map((_, index) => {
+    const { placeholder, original } = getCloudinaryImageUrl(String(index));
+    if (index != 0) return { placeholder, original };
+    return null;
+  });
+
+function App() {
+  return (
+    <div className="App">
+      <h1>Image Gallery</h1>
+      <div className="container">
+        <Gallery />
+      </div>
+    </div>
+  );
+}
+
+function Gallery() {
+  return (
+    <div className="wrapper" id="gallery-wrapper">
+      {images.map((image, index) =>
+        image ? (
+          <div key={index} className="image-container">
+            <Image src={image.original} placeholderSrc={image.placeholder} />
+          </div>
+        ) : null
+      )}
+    </div>
+  );
+}
+
+type ImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
+  placeholderSrc: string;
+};
+
+/**
+ * Object controlling Intersection Observer
+ *
+ * @param root - element used as the viewport for checking visibility of target,
+ * defaults to browser viewport if not specified.
+ * @param rootMargin - Margin around the root.
+ * @param threshold - At what percentage of target visiblity the callback is invoked
+ */
+const options = {
+  root: null,
+  rootMargin: "0px",
+  treshhold: 1,
+};
+
+function Image({ src, placeholderSrc }: ImageProps) {
+  const intersectingRef = useRef<HTMLImageElement | null>(null);
+  const observerRef = useRef<IntersectionObserver>();
+
+  useEffect(() => {
+    observerRef.current = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        const lazyImage = entry.target as HTMLImageElement;
+        //check if lazyImg dataset is available
+        if (lazyImage.dataset.src) {
+          lazyImage.src = lazyImage.dataset.src;
+          //image should be loaded by this time, unobserve already loaded images
+          observerRef.current?.unobserve(entry.target);
+        }
+      }
+    }, options);
+  }, []);
+
+  useEffect(() => {
+    const elementToObserve = intersectingRef.current;
+
+    if (elementToObserve && observerRef.current) {
+      return observerRef.current.observe(elementToObserve);
+    }
+
+    return function cleanup() {
+      if (observerRef.current) {
+        return observerRef.current.disconnect();
+      }
+    };
+  }, []);
+
+  return (
+    <img
+      src={placeholderSrc}
+      data-src={src}
+      ref={intersectingRef}
+      className="image"
+    />
+  );
+}
+
+export default App;
