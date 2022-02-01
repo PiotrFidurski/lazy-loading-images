@@ -1,17 +1,16 @@
-import { useEffect, useRef } from "react";
+import useNativeLazyLoading from "@charlietango/use-native-lazy-loading";
+import { useCallback, useRef, useState } from "react";
 import "./App.css";
 
 function getCloudinaryImageUrl(id: string) {
-  const original = `https://res.cloudinary.com/chimson/image/upload/v1643655382/intersection-observer-demo/image_${id}.jpg`;
-  const placeholder = `https://res.cloudinary.com/chimson/image/upload/f_webp,e_blur:1000,q_1/v1643655382/intersection-observer-demo/image_${id}.jpg`;
-  return { original, placeholder };
+  return `https://res.cloudinary.com/chimson/image/upload/f_webp,q_70,w_400,h_600/v1643655382/intersection-observer-demo/image_${id}.jpg`;
 }
 
 const images = Array(15)
   .fill(null)
   .map((_, index) => {
-    const { placeholder, original } = getCloudinaryImageUrl(String(index));
-    if (index != 0) return { placeholder, original };
+    const url = getCloudinaryImageUrl(String(index));
+    if (index != 0) return url;
     return null;
   });
 
@@ -32,7 +31,7 @@ function Gallery() {
       {images.map((image, index) =>
         image ? (
           <div key={index} className="image-container">
-            <Image src={image.original} placeholderSrc={image.placeholder} />
+            <Image src={image} width="400px" height="600px" />
           </div>
         ) : null
       )}
@@ -40,63 +39,73 @@ function Gallery() {
   );
 }
 
-type ImageProps = React.ImgHTMLAttributes<HTMLImageElement> & {
-  placeholderSrc: string;
-};
+type ImageProps = React.ImgHTMLAttributes<HTMLImageElement>;
 
-/**
- * Object controlling Intersection Observer
- *
- * @param root - element used as the viewport for checking visibility of target,
- * defaults to browser viewport if not specified.
- * @param rootMargin - Margin around the root.
- * @param threshhold - At what percentage of target visiblity the callback is invoked
- */
-const options = {
-  root: null,
-  rootMargin: "0px",
-  treshhold: 1,
-};
+function Image({ src, width, height }: ImageProps) {
+  /**
+   * Detects support for native loading.
+   * https://caniuse.com/loading-lazy-attr
+   */
+  const supportsNativeLoading = useNativeLazyLoading();
 
-function Image({ src, placeholderSrc }: ImageProps) {
-  const intersectingRef = useRef<HTMLImageElement | null>(null);
-  const observerRef = useRef<IntersectionObserver>();
+  const [inView, setInView] = useState(false);
 
-  useEffect(() => {
-    observerRef.current = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        const lazyImage = entry.target as HTMLImageElement;
-        //check if lazyImg dataset is available
-        if (lazyImage.dataset.src) {
-          lazyImage.src = lazyImage.dataset.src;
-          //image should be loaded by this time, unobserve already loaded images
-          observerRef.current?.unobserve(entry.target);
+  const observerRef = useRef<IntersectionObserver | undefined>(undefined);
+
+  const intersectingRef = useCallback(
+    (node) => {
+      // dont observe at all if lazy loading is natively supported
+      if (supportsNativeLoading) return;
+
+      if (node && !inView) {
+        /**
+         * Object controlling Intersection Observer
+         *
+         * @param root - element used as the viewport for checking visibility of target,
+         * defaults to browser viewport if not specified.
+         * @param rootMargin - Margin around the root.
+         * @param threshhold - At what percentage of target visiblity the callback is invoked
+         */
+        const options = {
+          root: null,
+          rootMargin: "600px 0px",
+          treshhold: 0,
+        };
+
+        observerRef.current = new IntersectionObserver(([entry]) => {
+          if (entry.isIntersecting) {
+            setInView(true);
+            //image should be loaded by this time, unobserve already loaded nodes
+            observerRef.current?.unobserve(entry.target);
+          }
+        }, options);
+
+        if (observerRef.current) {
+          observerRef.current.observe(node);
+        }
+
+        if (inView) {
+          observerRef.current.disconnect();
         }
       }
-    }, options);
-  }, []);
-
-  useEffect(() => {
-    const elementToObserve = intersectingRef.current;
-
-    if (elementToObserve && observerRef.current) {
-      return observerRef.current.observe(elementToObserve);
-    }
-
-    return function cleanup() {
-      if (observerRef.current) {
-        return observerRef.current.disconnect();
-      }
-    };
-  }, []);
+    },
+    [supportsNativeLoading]
+  );
 
   return (
-    <img
-      src={placeholderSrc}
-      data-src={src}
-      ref={intersectingRef}
-      className="image"
-    />
+    <div ref={intersectingRef}>
+      {inView || supportsNativeLoading ? (
+        <img
+          alt=""
+          //native lazy loading attr
+          loading="lazy"
+          src={src}
+          width={width}
+          height={height}
+          className="image"
+        />
+      ) : null}
+    </div>
   );
 }
 
